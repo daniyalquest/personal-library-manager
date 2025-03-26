@@ -1,119 +1,96 @@
-import json
 import streamlit as st
 
-FILENAME = 'data.json'
+def load_library():
+    library = []
+    with open("library.txt", "r") as file:
+        for line in file:
+            title, author, year, genre, read = line.strip().split(",")
+            library.append({"title": title, "author": author, "year": int(year), "genre": genre, "read": read == "True"})
+    return library
 
-def load_data(filename):
-    try:
-        with open(filename, 'r') as file:
-            data = json.load(file)
-            st.success("Data loaded successfully")
-            return data
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+library = load_library()
+def save_library():
+    with open("library.txt", "w") as file:
+        for book in library:
+            file.write(f"{book['title']},{book['author']},{book['year']},{book['genre']},{book['read']}\n")
 
-def save_data(filename, data):
-    with open(filename, 'w') as file:
-        json.dump(data, file, indent=4)
-        st.success("Data saved successfully")
+st.title("📚 Personal Library Manager")
 
-def add_book(data):
-    title = st.text_input("Enter the title: ").strip()
-    author = st.text_input("Enter the author: ").strip()
-    year = st.number_input("Enter the year: ", min_value=0, step=1)
-    genre = st.text_input("Enter the genre: ").strip()
-    read = st.radio("Have you read the book?", ('Yes', 'No')).strip().lower()
-    status_read = read == 'yes'
-    
+menu = st.sidebar.radio("📌 Menu", ["Add Book", "Remove Book", "Search Book", "View Library", "Statistics"])
+
+if menu == "Add Book":
+    st.subheader("➕ Add a New Book")
+
+    title = st.text_input("Enter Book Title")
+    author = st.text_input("Enter Author")
+    year = st.number_input("Enter Publication Year", min_value=0, step=1)
+    genre = st.text_input("Enter Genre")
+    read = st.radio("Have you read this book?", ["Yes", "No"])
+
     if st.button("Add Book"):
-        if title and author and genre:
-            book = {
-                'title': title,
-                'author': author,
-                'year': year,
-                'genre': genre,
-                'read': status_read
-            }
-            data.append(book)
-            save_data(FILENAME, data)
-            st.success("Book added successfully")
-        else:
-            st.error("Please fill in all required fields (Title, Author, Genre)")
+        book = {
+            "title": title,
+            "author": author,
+            "year": year,
+            "genre": genre,
+            "read": read == "Yes"
+        }
+        library.append(book)
+        save_library()
+        st.success(f"✅ '{title}' added successfully!")
 
-def remove_book(data):
-    title = st.text_input("Enter the title of the book to remove: ").strip()
+elif menu == "Remove Book":
+    st.subheader("🗑️ Remove a Book")
+
+    book_titles = [f'{book["title"]} by {book["author"]}' for book in library]
+    selected_book = st.selectbox("Select a book to remove", book_titles)
+
     if st.button("Remove Book"):
-        initial_length = len(data)
-        data[:] = [book for book in data if book['title'].lower() != title.lower()]
-        if len(data) < initial_length:
-            save_data(FILENAME, data)
-            st.success("Book removed successfully")
+        # Extract the title from the selected book string
+        title = selected_book.split(" by ")[0]
+        for book in library:
+            if book["title"].lower() == title.lower():
+                library.remove(book)
+                save_library()
+                st.success(f"✅ '{title}' removed successfully!")
+                break
         else:
-            st.error("Book not found")
+            st.error(f"❌ Sorry, '{title}' is not in the library.")
 
-def search_book(data):
-    search_by = st.radio("Search by:", ('Title', 'Author'))
-    query = st.text_input("Enter the title or author: ").strip().lower()
+elif menu == "Search Book":
+    st.subheader("🔍 Search for a Book")
+
+    search_by = st.radio("Search by:", ["Title", "Author"])
+    if search_by == "Title":
+        search_query = st.text_input("Enter the title")
+    elif search_by == "Author":
+        search_query = st.text_input("Enter the author")
+
     if st.button("Search"):
-        matches = []
-        for book in data:
-            if search_by == 'Title':
-                if query in book['title'].lower():
-                    matches.append(book)
-            else:
-                if query in book['author'].lower():
-                    matches.append(book)
-        if matches:
-            for match in matches:
-                st.write(f"Title: {match['title']}")
-                st.write(f"Author: {match['author']}")
-                st.write(f"Year: {match['year']}")
-                st.write(f"Genre: {match['genre']}")
-                st.write(f"Read: {'Yes' if match['read'] else 'No'}")
-                st.write("---")
+        found_books = [book for book in library if search_by == "Title" and search_query.lower() in book["title"].lower() or search_by == "Author" and search_query.lower() in book["author"].lower()]
+
+        if found_books:
+            for book in found_books:
+                st.write(f"📖 **{book['title']}** by {book['author']} ({book['year']}) - {book['genre']} - {'✅ Read' if book['read'] else '❌ Unread'}")
         else:
-            st.error("No books found")
+            st.error("❌ No books found.")
 
-def display_books(data):
-    if data:
-        for book in data:
-            st.write(f"Title: {book['title']}")
-            st.write(f"Author: {book['author']}")
-            st.write(f"Year: {book['year']}")
-            st.write(f"Genre: {book['genre']}")
-            st.write(f"Read: {'Yes' if book['read'] else 'No'}")
-            st.write("---")
+elif menu == "View Library":
+    st.subheader("📚 Your Library")
+
+    if not library:
+        st.warning("No books in your library.")
     else:
-        st.warning("No books to display")
+        for index, book in enumerate(library):
+            st.write(f"📖 **{index + 1}. {book['title']}** by {book['author']} ({book['year']}) - {book['genre']} - {'✅ Read' if book['read'] else '❌ Unread'}")
 
-def display_statistics(data):
-    total_books = len(data)
-    total_read = len([book for book in data if book['read']])
-    total_unread = total_books - total_read
-    st.write(f"Total books: {total_books}")
-    st.write(f"Total read: {total_read}")
-    st.write(f"Total unread: {total_unread}")
+elif menu == "Statistics":
+    st.subheader("📊 Library Statistics")
 
-def main():
-    st.title("Personal Library Manager")
-    data = load_data(FILENAME)
-    
-    menu = ["Add a book", "Remove a book", "Search for a book", "Display all books", "Display statistics", "Exit"]
-    choice = st.sidebar.selectbox("Menu", menu)
-    
-    if choice == "Add a book":
-        add_book(data)
-    elif choice == "Remove a book":
-        remove_book(data)
-    elif choice == "Search for a book":
-        search_book(data)
-    elif choice == "Display all books":
-        display_books(data)
-    elif choice == "Display statistics":
-        display_statistics(data)
-    elif choice == "Exit":
-        save_data(FILENAME, data)
-        st.write("Exiting...")
+    total_books = len(library)
+    total_read = len([book for book in library if book["read"]])
+    percentage_read = (total_read / total_books) * 100 if total_books > 0 else 0
 
-if __name__ == '__main__':
-    main()
+    st.write(f"📖 **Total Books:** {total_books}")
+    st.write(f"✅ **Books Read:** {total_read}")
+    st.write(f"📊 **Percentage Read:** {percentage_read}%")
